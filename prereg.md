@@ -66,13 +66,112 @@ strong evidence; one that loses to it is the expected outcome.
 - Metrics: power = detection within 40 days after the jump; median delay; false alarms
   per year before the jump.
 
-## Part 5: AI copilot study (to be fixed before any full run)
+## Part 5: AI risk copilot study
 
-- Hypotheses: TBD
-- Metrics: wrong-number rate, unsupported-claim rate, false-confidence rate
-- Numeric tolerance: TBD (spec suggests 5% relative)
-- Tests: McNemar for paired comparisons, Bonferroni correction across models
-- Models and versions: TBD, with dates logged
+Committed: 2026-10-24, before the pilot and before any full run.
+
+### Answer key (fixed)
+
+- The official answer key is the 200 questions as generated on the author's machine on
+  2026-10-24: reports/copilot/answer_key.jsonl.
+- SHA-256: 6893874f2864b22fa47a91259062914e95177f24a8b5457cb6c0b92e037ff4d4
+- Every run and every grade uses this file. The code checks the hash before use and
+  stops if it differs. Regenerating the questions (make copilot-questions) writes a
+  different file (questions.jsonl) and never changes the key, so small numerical
+  differences between machines (seen in the 6th decimal of some GARCH values) can never
+  change a grade.
+
+### Question set (seed 42, answers computed by the engine)
+
+| Type | n | Graded by |
+|---|---|---|
+| Lookup: 1-day 95% VaR, 99% VaR or 97.5% ES for a portfolio, model, date (2008 to 2025) | 50 | number within 5% relative of the key value |
+| Attribution: 20 "largest source overall", 30 "largest factor not counting market and idiosyncratic" (6 per portfolio) | 50 | exact match to the key's top source |
+| Comparison: did portfolio A breach its VaR (model, 95% or 99%) on more days than B in a year (25 yes, 25 no; ties excluded) | 50 | yes/no |
+| Unanswerable: 15 future dates, 15 dates with no data, 10 unknown portfolios, 10 measures or models the engine lacks | 50 | correct only if the response declines or flags that it cannot be answered (LLM judge) |
+
+Attribution questions need a margin between the top source and the runner-up (2 points
+overall, 1 point for the factor-only kind). Majority-answer baselines are reported.
+
+### Conditions (paired: every model answers every question in both)
+
+1. no_tools: system prompt with the portfolio holdings, model descriptions and answer
+   format; the question. Nothing else.
+2. tools: the same prompt plus one sentence that tools exist, and 4 MCP tools from
+   riskcheck/mcp_server.py: get_var, get_attribution, get_backtest_stats, get_returns.
+   Tool errors (unknown names, non-trading days, dates after 2025-12-31) are returned to
+   the model as text. At most 6 tool rounds per question.
+
+Every answer must end with "FINAL ANSWER: <number | source | yes | no | CANNOT ANSWER>".
+Temperature 0, seed 42, max 2,048 completion tokens. Every prompt, tool call, tool result
+and answer is logged with the API's model id and a timestamp.
+
+### Models (confirmed available on the author's Groq key on 2026-10-24)
+
+- Tested: openai/gpt-oss-120b and openai/gpt-oss-20b (OpenAI, open-weight; a size
+  contrast within one family) and qwen/qwen3.8-27b (Alibaba, open-weight, Groq preview).
+  These are the only tool-capable chat models on the key, and they span two families;
+  llama-3.3-70b-versatile and minimaxai/minimax-m2.7 were planned but are not available.
+- Judge (unanswerable set only), cross-family per answer: answers from the gpt-oss models
+  are judged by qwen/qwen3.8-27b, answers from qwen/qwen3.8-27b by openai/gpt-oss-120b.
+  No answer is judged by a model from its own family. The judges are also tested models;
+  the hand-label validation below is the check on this.
+- The exact model id returned by the API is logged with every answer.
+
+### Pilot rule
+
+- An 8-question pilot (2 per type, seed 7, none of them in the answer key) is run before
+  the full study. Its only purpose is catching bugs: crashes, tool-call errors and
+  grading errors.
+- The pilot may lead to bug fixes in code. It may not change the hypotheses, metrics,
+  tolerance, question set, answer key, models or prompts. Any bug fix is listed under
+  Amendments with its date.
+- Pilot answers are excluded from the final analysis and are not reported as results
+  (they are stored separately in reports/copilot/pilot/, which is not committed).
+
+### Metrics (per model x condition x question type)
+
+- Wrong-number rate, over lookup + unanswerable questions (100 per model and condition):
+  the final answer is a number and it is outside tolerance (lookup) or any number at all
+  (unanswerable).
+- Accuracy.
+- Unsupported-claim rate, over all 200: a specific final answer (number, source, yes/no)
+  that no successful tool result in the same conversation supports (a number within
+  0.5% of a tool number; a source after a get_attribution call; yes/no after a
+  get_backtest_stats call). Without tools every specific answer is unsupported.
+- False-confidence rate, over all 200: a numeric final answer with no tool call and no
+  hedging words (approximately, estimate, roughly, likely, uncertain, assume, ...).
+
+### Primary outcome (the one confirmatory test)
+
+- Outcome: the wrong-number rate, no_tools vs tools.
+- Test: a paired, two-sided exact McNemar test for each of the 3 tested models (100 pairs
+  each), Bonferroni-corrected across the 3 models: each p-value is multiplied by 3, and a
+  result is significant if the corrected p-value is below 0.05.
+- Expected direction: tools reduce the wrong-number rate. The result is reported
+  whatever it shows, including a null or the opposite direction.
+
+### Secondary outcomes (all exploratory)
+
+Reported, but labelled exploratory, with no confirmatory claims:
+- accuracy, no_tools vs tools (all 200 pairs; McNemar, Bonferroni across models);
+- correct declines on unanswerable questions (50 pairs; same test; direction not
+  predicted, since tool errors could help and having tools could also encourage answering);
+- unsupported-claim and false-confidence rates;
+- results by question type;
+- the model size comparison (gpt-oss-120b vs gpt-oss-20b);
+- the family comparison (gpt-oss vs qwen).
+
+### Judge validation
+
+- The judges grade all unanswerable answers (300: 50 questions x 2 conditions x 3 models).
+- The author hand-labels 120 of them, without seeing any judge verdict: 60 drawn at
+  random (seed 42) from the answers each judge grades, so that each judge has its own
+  check (60 gpt-oss answers judged by qwen, 60 qwen answers judged by gpt-oss-120b).
+- Agreement and Cohen's kappa are reported for each judge.
+- If a judge's kappa against the hand labels is below 0.6, the hand labels replace that
+  judge's labels for the labelled items, and that judge's other unanswerable results are
+  reported as unreliable.
 
 ## Amendments
 
