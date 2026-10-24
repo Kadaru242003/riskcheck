@@ -7,13 +7,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.14"
+            deps: requirements.lock   # exact versions used for the results
+          - python: "3.11"
+            deps: requirements.txt    # oldest supported Python, version ranges
+    name: Python ${{ matrix.python }} (${{ matrix.deps }})
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: pip install -r ${{ matrix.deps }}
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest

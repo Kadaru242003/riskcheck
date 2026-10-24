@@ -2,7 +2,8 @@ PY ?= python
 COPILOT_MODELS ?= openai/gpt-oss-120b openai/gpt-oss-20b qwen/qwen3.8-27b
 
 .PHONY: install data portfolios forecasts backtest drift copilot-questions copilot-models \
-	copilot-pilot copilot copilot-judge copilot-label copilot-report mcp report test lint all
+	copilot-pilot copilot copilot-judge copilot-label copilot-report mcp report dashboard test lint \
+	all
 
 install:
 	$(PY) -m pip install -r requirements.txt
@@ -47,7 +48,10 @@ mcp:
 	$(PY) -m riskcheck.mcp_server
 
 report:
-	@echo "Report generation: not implemented yet"
+	$(PY) -m riskcheck.report
+
+dashboard:
+	streamlit run app/streamlit_app.py
 
 test:
 	$(PY) -m pytest
@@ -56,4 +60,4 @@ lint:
 	$(PY) -m ruff check .
 	$(PY) -m ruff format --check .
 
-all: data portfolios forecasts backtest drift copilot report
+all: data portfolios forecasts backtest drift report
