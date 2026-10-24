@@ -197,4 +197,10 @@ Reported, but labelled exploratory, with no confirmatory claims:
   the results table reports the number of fallbacks and missing answers. The answer
   format in the prompt, the hypotheses, metrics, tolerance, questions, answer key, models
   and prompts are unchanged.
+- 2026-10-24, Part 5 full run, operational change only: Groq's free tier has a daily
+  token limit per model, which gpt-oss-120b reached partway through the run. The runner
+  now stops a model when its daily limit is reached and moves on to the next model, and
+  the same command is rerun after the reset to finish the remaining questions. Answers
+  may therefore be collected over more than one day; every answer keeps its timestamp
+  and the API's model id. No change to the design.
 

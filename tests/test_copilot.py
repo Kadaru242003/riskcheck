@@ -453,3 +453,41 @@ def test_fallback_is_recorded():
     assert g["correct"] and g["answer_read_as"] == "last_line_fallback"
     g = grading.grade_one(_q("lookup", 2.0), _rec("FINAL ANSWER: 2.01"))
     assert g["answer_read_as"] == "final_line"
+
+
+def test_daily_limit_moves_to_next_model(tmp_path):
+    class RateLimitError(Exception):
+        pass
+
+    class Limited(FakeLLM):
+        def create(self, **kw):
+            if kw["model"] == "limited/model":
+                raise RateLimitError(
+                    "Rate limit reached for model on tokens per day (TPD): Limit 200000"
+                )
+            return super().create(**kw)
+
+    qs = [{"id": f"q{i}", "type": "lookup", "question": "q?"} for i in range(3)]
+    runner.run(Limited(), ["limited/model", "ok/model"], qs, root=tmp_path)
+    assert (
+        not runner.log_path("limited/model", "no_tools", tmp_path).exists()
+        or runner.log_path("limited/model", "no_tools", tmp_path).read_text() == ""
+    )
+    for cond in runner.CONDITIONS:
+        assert len(runner.log_path("ok/model", cond, tmp_path).read_text().splitlines()) == 3
+
+
+def test_per_minute_limit_is_waited_out(monkeypatch):
+    class RateLimitError(Exception):
+        response = None
+
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise RateLimitError("Rate limit reached on tokens per minute (TPM)")
+        return "ok"
+
+    monkeypatch.setattr(runner.time, "sleep", lambda s: None)
+    assert runner._with_retries(flaky) == "ok" and calls["n"] == 3

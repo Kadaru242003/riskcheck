@@ -91,8 +91,21 @@ def make_client():
 # ---------------------------------------------------------------- one conversation
 
 
+class DailyLimitReached(Exception):
+    """The model's per-day token or request allowance is used up; retry after the reset."""
+
+
+def _limit_kind(e: Exception) -> str:
+    m = re.search(r"per (minute|day) \((\w+)\)", str(e))
+    return f"per {m.group(1)} ({m.group(2)})" if m else "unspecified"
+
+
 def _with_retries(fn, *args, **kwargs):
-    """Call the API, backing off on rate limits and transient errors."""
+    """Call the API, backing off on rate limits and transient errors.
+
+    A per-day limit is not waited out: it raises DailyLimitReached so the run can move
+    on to another model, which has its own allowance.
+    """
     delay = 5.0
     for attempt in range(MAX_RETRIES):
         try:
@@ -103,6 +116,8 @@ def _with_retries(fn, *args, **kwargs):
             retryable = name in ("RateLimitError", "APIConnectionError", "APITimeoutError") or (
                 status is not None and status >= 500
             )
+            if name == "RateLimitError" and "per day" in _limit_kind(e):
+                raise DailyLimitReached(str(e)[:300]) from e
             if not retryable or attempt == MAX_RETRIES - 1:
                 raise
             wait = delay
@@ -114,7 +129,10 @@ def _with_retries(fn, *args, **kwargs):
                         wait = max(float(ra), 1.0)
                     except ValueError:
                         pass
-            print(f"  {name}; waiting {wait:.0f}s (attempt {attempt + 1})")
+            print(
+                f"  {name} [{_limit_kind(e)}]; waiting {wait:.0f}s (attempt {attempt + 1})",
+                flush=True,
+            )
             time.sleep(wait)
             delay = min(delay * 2, 120)
 
@@ -244,23 +262,34 @@ def run(
     tools = asyncio.run(mcp_server.tool_schemas())
     check_models(client, models)
     root.mkdir(parents=True, exist_ok=True)
+    daily_limited: set[str] = set()
     for model in models:
         for cond in conditions:
+            if model in daily_limited:
+                break
             path = log_path(model, cond, root)
             skip = done_ids(path)
             todo = [q for q in qs if q["id"] not in skip]
-            print(f"{model} / {cond}: {len(todo)} to run ({len(skip)} done)")
+            print(f"{model} / {cond}: {len(todo)} to run ({len(skip)} done)", flush=True)
             for q in todo:
                 fatal = False
                 try:
                     rec = ask(client, model, q["question"], cond, tools, mcp_server.call_tool_sync)
+                except DailyLimitReached as e:
+                    print(
+                        f"  daily limit reached for {model}; moving to the next model. "
+                        f"Rerun later to finish it. ({str(e)[:160]})",
+                        flush=True,
+                    )
+                    daily_limited.add(model)
+                    break
                 except Exception as e:  # log and move on; rerun picks it up later
                     rec = {
                         "model": model,
                         "condition": cond,
                         "error": f"{type(e).__name__}: {str(e)[:300]}",
                     }
-                    print(f"  {q['id']}: {rec['error']}")
+                    print(f"  {q['id']}: {rec['error']}", flush=True)
                     fatal = type(e).__name__ in FATAL_ERRORS  # e.g. model not on this key
                 rec = {"id": q["id"], "type": q["type"], **rec}
                 with open(path, "a") as f:
@@ -269,6 +298,12 @@ def run(
                     raise SystemExit(f"stopping: {model} is not usable; see {path.name}")
                 if pause:
                     time.sleep(pause)
+    if daily_limited:
+        print(
+            f"stopped early (daily limit): {', '.join(sorted(daily_limited))}; "
+            "rerun the same command after the limit resets",
+            flush=True,
+        )
 
 
 def pilot_questions() -> list[dict]:
