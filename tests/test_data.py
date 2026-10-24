@@ -13,8 +13,8 @@ from riskcheck.data import (
     CORE_ASSETS,
     END,
     EXTREME_RETURN,
-    FACTORS,
     PROCESSED_DIR,
+    RISK_FACTORS,
     clean,
     load,
     parse_french_csv,
@@ -52,7 +52,7 @@ class TestCleanSynthetic:
         assert cd.factors.index.equals(cd.returns.index)
         assert cd.market.index.equals(cd.returns.index)
         assert not cd.returns[CORE_ASSETS].isna().any().any()
-        assert not cd.factors[FACTORS].isna().any().any()
+        assert not cd.factors[RISK_FACTORS].isna().any().any()
         assert not cd.market.isna().any().any()
 
     def test_log_returns(self, synthetic_inputs):
@@ -68,12 +68,32 @@ class TestCleanSynthetic:
         prev = vix.loc[:gap].dropna().iloc[-1]
         assert cd.market.at[gap, "vix"] == prev
 
+    def test_rates_factor_is_negative_yield_change(self, synthetic_inputs):
+        cd = clean(**synthetic_inputs)
+        y = cd.market["dgs10"]
+        d0, d1 = cd.returns.index[30], cd.returns.index[31]
+        assert cd.factors.at[d1, "Rates"] == pytest.approx(-(y[d1] - y[d0]) / 100)
+        assert cd.factors["Gold"].equals(cd.returns["GLD"])
+
+    def test_fred_gaps_filled_from_past_and_logged(self, synthetic_inputs):
+        cd = clean(**synthetic_inputs)
+        dgs10 = synthetic_inputs["dgs10"]
+        logged = set(cd.filled.loc[cd.filled["series"] == "DGS10", "date"])
+        assert {pd.Timestamp("2006-07-04"), pd.Timestamp("2006-11-10")} <= logged
+        assert cd.market.at[pd.Timestamp("2006-07-04"), "dgs10"] == dgs10.loc["2006-07-03"]
+        # a filled day has zero yield change
+        assert cd.factors.at[pd.Timestamp("2006-07-04"), "Rates"] == 0.0
+
+    def test_long_fred_gap_raises(self, synthetic_inputs):
+        inputs = dict(synthetic_inputs)
+        inputs["dgs10"] = inputs["dgs10"].drop(pd.bdate_range("2006-08-01", "2006-08-31"))
+        with pytest.raises(ValueError, match="gap longer"):
+            clean(**inputs)
+
     def test_extreme_return_flagged(self, synthetic_inputs):
         p = synthetic_inputs["prices"].copy()
         p.loc["2007-06-01":, "XLE"] *= 1.5  # ~ +40% one-day jump
-        cd = clean(
-            p, synthetic_inputs["factors"], synthetic_inputs["vix"], synthetic_inputs["tbill"]
-        )
+        cd = clean(**{**synthetic_inputs, "prices": p})
         hit = cd.extremes[(cd.extremes["ticker"] == "XLE")]
         assert len(hit) == 1 and hit["reason"].iloc[0] == ""
 
@@ -108,7 +128,11 @@ class TestRealData:
 
     def test_factor_dates_match_price_dates(self, cd):
         assert cd.factors.index.equals(cd.returns.index)
-        assert not cd.factors[FACTORS].isna().any().any()
+        assert not cd.factors[RISK_FACTORS].isna().any().any()
+
+    def test_fred_fills_are_logged(self, cd):
+        assert set(cd.filled["series"]) <= {"VIXCLS", "DTB3", "DGS10"}
+        assert cd.filled["date"].isin(cd.returns.index).all()
 
     def test_full_history(self, cd):
         assert cd.returns.index.min() < pd.Timestamp("2005-01-15")

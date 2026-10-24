@@ -15,10 +15,10 @@ forecasts:
 	$(PY) -m riskcheck.forecasts
 
 backtest:
-	@echo "Part 3: not implemented yet"
+	$(PY) -m riskcheck.backtest
 
 drift:
-	@echo "Part 4: not implemented yet"
+	$(PY) -m riskcheck.drift
 
 copilot:
 	@echo "Part 5: not implemented yet"

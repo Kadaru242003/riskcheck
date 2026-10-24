@@ -1,0 +1,7 @@
+model,detector,power,median_delay_days,false_alarms_per_year
+ewma,breach_count,0.233,14.0,0.3793802556941668
+ewma,cusum,0.905,5.0,2.7784555771207717
+ewma,page_hinkley,0.8,5.0,2.0778646611044764
+historical,breach_count,0.718,16.0,0.8374765518129564
+historical,cusum,0.992,6.0,2.4271703575522348
+historical,page_hinkley,0.959,6.0,1.9139509917328188

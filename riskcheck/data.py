@@ -3,7 +3,7 @@
 Sources (all free; raw files are cached in data/raw and never committed):
 - ETF adjusted closes: Yahoo Finance via yfinance, falling back to Stooq CSV.
 - Fama-French 5 factors and momentum, daily: Kenneth French Data Library.
-- VIX (VIXCLS) and 3-month T-bill (DTB3): FRED.
+- VIX (VIXCLS), 3-month T-bill (DTB3) and 10-year Treasury yield (DGS10): FRED.
 
 Run ``python -m riskcheck.data`` to build data/processed/*.parquet.
 Reruns read the cache and need no network.
@@ -34,7 +34,14 @@ SECTORS_LATE = ["XLRE", "XLC"]  # start 2015 and 2018; robustness checks only
 CORE_ASSETS = ["SPY", *SECTORS_LONG, "TLT", "GLD"]
 ALL_ASSETS = [*CORE_ASSETS, *SECTORS_LATE]
 
-FACTORS = ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "Mom"]
+FACTORS = ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "Mom"]  # Fama-French equity factors
+# Risk-model factors: the 6 equity factors, plus
+# - Rates: the negative daily change in the 10-year Treasury yield (decimal), so falling
+#   yields (rising bond prices) are positive. Built from FRED DGS10, not from TLT, so the
+#   bond holding does not explain itself.
+# - Gold: GLD daily log return, a proxy (GLD is also a holding; see README limitations).
+RISK_FACTORS = [*FACTORS, "Rates", "Gold"]
+FRED_FFILL_LIMIT = 5  # max consecutive trading days a FRED value may be carried forward
 
 FRENCH_BASE = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/"
 FRENCH_FILES = {
@@ -174,6 +181,24 @@ class CleanData:
     market: pd.DataFrame  # vix level, daily risk-free rate; same index as returns
     dropped: pd.DataFrame  # every dropped day with its reason
     extremes: pd.DataFrame  # every |return| > EXTREME_RETURN with its reason
+    filled: pd.DataFrame  # every trading day a FRED value was forward-filled
+
+
+def align_fred(series: pd.Series, dates: pd.DatetimeIndex) -> tuple[pd.Series, list]:
+    """Put a FRED series on trading days, carrying values forward over FRED gaps only.
+
+    Gaps (FRED holidays, or "." entries) are filled from the most recent earlier value, at
+    most FRED_FFILL_LIMIT days in a row; never backward. Returns the aligned series and the
+    list of trading days that were filled.
+    """
+    s = series.dropna().sort_index()
+    s = s[~s.index.duplicated(keep="last")]
+    filled_days = [d for d in dates if d not in s.index]
+    on_days = s.reindex(s.index.union(dates)).ffill(limit=FRED_FFILL_LIMIT).reindex(dates)
+    if on_days.isna().any():
+        bad = on_days.index[on_days.isna()]
+        raise ValueError(f"{series.name}: gap longer than {FRED_FFILL_LIMIT} days at {bad[:3]}")
+    return on_days, filled_days
 
 
 def clean(
@@ -181,6 +206,7 @@ def clean(
     factors: pd.DataFrame,
     vix: pd.Series,
     tbill: pd.Series,
+    dgs10: pd.Series,
     start: str = START,
     end: str = END,
 ) -> CleanData:
@@ -190,7 +216,9 @@ def clean(
     - The calendar is the set of days with a SPY price inside [start, end].
     - A day is dropped if any core asset price is missing, or the factor file has no row.
     - Late-start ETFs (XLRE, XLC) may be NaN before their inception; they are not core.
-    - VIX and T-bill gaps are forward-filled from earlier days only (never backward).
+    - FRED gaps (VIX, T-bill, 10-year yield) are forward-filled from earlier days only,
+      at most FRED_FFILL_LIMIT days in a row, and every filled day is logged.
+    - Rates factor on day t = -(y_t - y_{t-1}) / 100 with y the aligned DGS10 yield in %.
     """
     prices = prices.loc[(prices.index >= start) & (prices.index <= end)].sort_index()
     prices = prices[~prices.index.duplicated(keep="first")]
@@ -211,15 +239,26 @@ def clean(
     # Late-start ETFs get NaN returns before (and on) their first price, which is fine.
     returns = np.log(prices / prices.shift(1)).iloc[1:]
 
-    fac = factors.reindex(returns.index)
+    filled = []
+    vix_a, f = align_fred(vix.rename("VIXCLS"), returns.index)
+    filled += [("VIXCLS", d) for d in f]
+    tb_a, f = align_fred(tbill.rename("DTB3"), returns.index)
+    filled += [("DTB3", d) for d in f]
+    # Align the yield on the price calendar (one extra day at the start) so the first
+    # return day has a yield change.
+    y, f = align_fred(dgs10.rename("DGS10"), prices.index)
+    filled += [("DGS10", d) for d in f if d in returns.index]
 
-    vix_a = vix.sort_index().reindex(vix.index.union(returns.index)).ffill()
-    tb_a = tbill.sort_index().reindex(tbill.index.union(returns.index)).ffill()
+    fac = factors.reindex(returns.index).copy()
+    fac["Rates"] = (-(y.diff()) / 100.0).reindex(returns.index)
+    fac["Gold"] = returns["GLD"]
+
     market = pd.DataFrame(
         {
-            "vix": vix_a.reindex(returns.index),
+            "vix": vix_a,
             # DTB3 is an annualized percent yield; convert to a daily decimal rate.
-            "rf_daily": tb_a.reindex(returns.index) / 100.0 / 252.0,
+            "rf_daily": tb_a / 100.0 / 252.0,
+            "dgs10": y.reindex(returns.index),
         }
     )
 
@@ -236,6 +275,7 @@ def clean(
         market=market,
         dropped=pd.DataFrame(dropped, columns=["date", "reason"]),
         extremes=pd.DataFrame(ext, columns=["date", "ticker", "log_return", "reason"]),
+        filled=pd.DataFrame(filled, columns=["series", "date"]),
     )
 
 
@@ -247,6 +287,7 @@ def save(cd: CleanData, out: Path = PROCESSED_DIR) -> None:
     cd.market.to_parquet(out / "market.parquet")
     cd.dropped.to_csv(out / "dropped_days.csv", index=False)
     cd.extremes.to_csv(out / "extreme_returns.csv", index=False)
+    cd.filled.to_csv(out / "filled_days.csv", index=False)
 
 
 def load(out: Path = PROCESSED_DIR) -> CleanData:
@@ -257,6 +298,7 @@ def load(out: Path = PROCESSED_DIR) -> CleanData:
         market=pd.read_parquet(out / "market.parquet"),
         dropped=pd.read_csv(out / "dropped_days.csv", parse_dates=["date"]),
         extremes=pd.read_csv(out / "extreme_returns.csv", parse_dates=["date"]),
+        filled=pd.read_csv(out / "filled_days.csv", parse_dates=["date"]),
     )
 
 
@@ -265,7 +307,8 @@ def build(refresh: bool = False) -> CleanData:
     factors = download_factors(refresh=refresh)
     vix = download_fred("VIXCLS", refresh=refresh)
     tbill = download_fred("DTB3", refresh=refresh)
-    cd = clean(prices, factors, vix, tbill)
+    dgs10 = download_fred("DGS10", refresh=refresh)
+    cd = clean(prices, factors, vix, tbill, dgs10)
     save(cd)
     return cd
 
@@ -279,6 +322,7 @@ if __name__ == "__main__":
         f"to {r.index.max():%Y-%m-%d}"
     )
     print(f"dropped days: {len(cd.dropped)}  extreme returns: {len(cd.extremes)}")
+    print("FRED days forward-filled:", cd.filled["series"].value_counts().to_dict())
     print(
         f"factor NaNs: {int(cd.factors.isna().sum().sum())}  "
         f"market NaNs: {int(cd.market.isna().sum().sum())}"

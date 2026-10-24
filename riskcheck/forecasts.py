@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from riskcheck.data import CORE_ASSETS, load
+from riskcheck.data import CORE_ASSETS, RISK_FACTORS, load
 from riskcheck.models import ewma, factor, garch, historical
 from riskcheck.portfolios import REPORTS_DIR, build_all
 
@@ -22,7 +22,7 @@ CHECK_DAYS = ["2008-09-29", "2008-10-15", "2017-06-15", "2020-03-12", "2020-03-1
 def run() -> tuple[pd.DataFrame, pd.DataFrame]:
     cd = load()
     port, weights = build_all(cd.returns)
-    fm = factor.fit(cd.returns[CORE_ASSETS], cd.factors)
+    fm = factor.fit(cd.returns[CORE_ASSETS], cd.factors[RISK_FACTORS])
 
     frames, attrs, gparams = [], [], []
     for name in port.columns:

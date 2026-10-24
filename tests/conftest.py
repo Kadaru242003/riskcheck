@@ -23,7 +23,10 @@ def synthetic_inputs():
     vix = pd.Series(rng.uniform(10, 40, len(days)), index=days, name="VIXCLS")
     vix.iloc[::17] = np.nan  # gaps to forward-fill
     tbill = pd.Series(3.0, index=days, name="DTB3")
-    return {"prices": prices, "factors": factors, "vix": vix, "tbill": tbill}
+    dgs10 = pd.Series(4.0 + np.cumsum(rng.normal(0, 0.05, len(days))), index=days, name="DGS10")
+    dgs10 = dgs10.drop(pd.Timestamp("2006-07-04"))  # FRED holiday gap -> forward-filled
+    dgs10.loc["2006-11-10"] = np.nan  # FRED "." entry -> forward-filled
+    return {"prices": prices, "factors": factors, "vix": vix, "tbill": tbill, "dgs10": dgs10}
 
 
 @pytest.fixture

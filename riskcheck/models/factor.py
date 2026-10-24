@@ -1,8 +1,9 @@
-"""Six-factor risk model with risk attribution.
+"""Factor risk model with risk attribution (8 factors: 6 equity, rates, gold).
 
 For forecast date d:
-- B: each asset's exposures to the 6 factors, from an OLS (with intercept) of its
-  daily log returns on factor returns over the ``WINDOW`` days strictly before d.
+- B: each asset's exposures to the factors, from an OLS (with intercept) of its
+  daily log returns on the factor returns over the ``WINDOW`` days strictly before d.
+  The factors are the columns of the ``factors`` frame passed to ``fit``.
 - D: each asset's residual (idiosyncratic) variance from the same regression.
 - Sigma_f: EWMA covariance of factor returns using days strictly before d.
 
@@ -21,7 +22,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from riskcheck.data import FACTORS
 from riskcheck.models.base import normal_risk, to_frame
 
 WINDOW = 250
@@ -34,6 +34,7 @@ IDIO = "idiosyncratic"
 class FactorModel:
     dates: pd.DatetimeIndex  # forecast dates
     assets: list[str]
+    factors: list[str]
     B: np.ndarray  # (T, n_assets, n_factors)
     D: np.ndarray  # (T, n_assets)
     S: np.ndarray  # (T, n_factors, n_factors)
@@ -51,9 +52,9 @@ class FactorModel:
         var = contrib.sum(axis=1) + idio
         sigma = np.sqrt(var)
         fc = to_frame(common, normal_risk(0.0, sigma))
-        attr = pd.DataFrame(contrib / var[:, None], index=common, columns=FACTORS)
+        attr = pd.DataFrame(contrib / var[:, None], index=common, columns=self.factors)
         attr[IDIO] = idio / var
-        expo = pd.DataFrame(b, index=common, columns=[f"beta_{f}" for f in FACTORS])
+        expo = pd.DataFrame(b, index=common, columns=[f"beta_{f}" for f in self.factors])
         return fc, attr.join(expo)
 
 
@@ -74,7 +75,7 @@ def fit(asset_returns: pd.DataFrame, factors: pd.DataFrame, window: int = WINDOW
     if not asset_returns.index.equals(factors.index):
         raise ValueError("asset and factor returns must share the same dates")
     R = asset_returns.to_numpy(dtype=float)
-    F = factors[FACTORS].to_numpy(dtype=float)
+    F = factors.to_numpy(dtype=float)
     n, k = F.shape
     S_all = ewma_cov(F)
     start = max(window, COV_INIT)
@@ -91,6 +92,7 @@ def fit(asset_returns: pd.DataFrame, factors: pd.DataFrame, window: int = WINDOW
     return FactorModel(
         dates=asset_returns.index[start:],
         assets=list(asset_returns.columns),
+        factors=list(factors.columns),
         B=B,
         D=D,
         S=S_all[start:],
