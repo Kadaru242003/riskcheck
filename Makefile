@@ -1,6 +1,5 @@
 PY ?= python
-COPILOT_MODELS ?= llama-3.3-70b-versatile openai/gpt-oss-120b qwen/qwen3.8-27b
-JUDGE_MODEL ?= minimaxai/minimax-m2.7
+COPILOT_MODELS ?= openai/gpt-oss-120b openai/gpt-oss-20b qwen/qwen3.8-27b
 
 .PHONY: install data portfolios forecasts backtest drift copilot-questions copilot-models \
 	copilot-pilot copilot copilot-judge copilot-label copilot-report mcp report test lint all
@@ -36,7 +35,7 @@ copilot:
 	$(PY) -m riskcheck.copilot.runner run --models $(COPILOT_MODELS)
 
 copilot-judge:
-	$(PY) -m riskcheck.copilot.analysis judge --judge-model $(JUDGE_MODEL)
+	$(PY) -m riskcheck.copilot.analysis judge
 
 copilot-label:
 	$(PY) -m riskcheck.copilot.analysis label

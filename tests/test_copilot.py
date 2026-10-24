@@ -420,3 +420,26 @@ def test_low_kappa_judge_is_replaced_by_hand_labels(tmp_path, monkeypatch):
     assert (weak["label_source"] == "human").all()
     assert (weak["correct"] == weak["human_label"].eq("CORRECT")).all()
     assert (strong["label_source"] == "judge").all()
+
+
+def test_run_stops_on_missing_model(tmp_path):
+    class NotFoundError(Exception):
+        pass
+
+    class Missing(FakeLLM):
+        def create(self, **kw):
+            raise NotFoundError("model_not_found")
+
+    qs = [{"id": f"q{i}", "type": "lookup", "question": "q?"} for i in range(5)]
+    with pytest.raises(SystemExit, match="not usable"):
+        runner.run(Missing(), ["gone/model"], qs, root=tmp_path)
+    lines = runner.log_path("gone/model", "no_tools", tmp_path).read_text().splitlines()
+    assert len(lines) == 1
+
+
+def test_run_stops_on_unavailable_model(tmp_path):
+    llm = FakeLLM()
+    llm.models = NS(list=lambda: NS(data=[NS(id="fake/model")]))
+    with pytest.raises(SystemExit, match="not available"):
+        runner.run(llm, ["fake/model", "missing/model"], [], root=tmp_path)
+    assert llm.calls == []

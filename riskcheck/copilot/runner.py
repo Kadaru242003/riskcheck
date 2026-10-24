@@ -31,6 +31,8 @@ MAX_TOOL_ROUNDS = 6
 TEMPERATURE = 0.0
 MAX_TOKENS = 2048
 MAX_RETRIES = 8
+# Errors that will repeat on every question: stop instead of logging 200 failures.
+FATAL_ERRORS = {"NotFoundError", "AuthenticationError", "PermissionDeniedError"}
 
 HOLDINGS = """Portfolios (all rebalanced monthly; data 2006 to 2025):
 - 60/40: 60% SPY, 40% TLT.
@@ -216,6 +218,17 @@ def done_ids(path: Path) -> set[str]:
     return ids
 
 
+def check_models(client, models: list[str]) -> None:
+    """Stop before any call if a requested model is not available to this key."""
+    lister = getattr(getattr(client, "models", None), "list", None)
+    if lister is None:  # test doubles
+        return
+    available = {m.id for m in lister().data}
+    missing = [m for m in models if m not in available]
+    if missing:
+        raise SystemExit(f"not available to this key: {', '.join(missing)}")
+
+
 def run(
     client,
     models: list[str],
@@ -229,6 +242,7 @@ def run(
     from riskcheck import mcp_server
 
     tools = asyncio.run(mcp_server.tool_schemas())
+    check_models(client, models)
     root.mkdir(parents=True, exist_ok=True)
     for model in models:
         for cond in conditions:
@@ -237,6 +251,7 @@ def run(
             todo = [q for q in qs if q["id"] not in skip]
             print(f"{model} / {cond}: {len(todo)} to run ({len(skip)} done)")
             for q in todo:
+                fatal = False
                 try:
                     rec = ask(client, model, q["question"], cond, tools, mcp_server.call_tool_sync)
                 except Exception as e:  # log and move on; rerun picks it up later
@@ -246,9 +261,12 @@ def run(
                         "error": f"{type(e).__name__}: {str(e)[:300]}",
                     }
                     print(f"  {q['id']}: {rec['error']}")
+                    fatal = type(e).__name__ in FATAL_ERRORS  # e.g. model not on this key
                 rec = {"id": q["id"], "type": q["type"], **rec}
                 with open(path, "a") as f:
                     f.write(json.dumps(rec, default=str) + "\n")
+                if fatal:
+                    raise SystemExit(f"stopping: {model} is not usable; see {path.name}")
                 if pause:
                     time.sleep(pause)
 

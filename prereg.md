@@ -185,3 +185,7 @@ Reported, but labelled exploratory, with no confirmatory claims:
   factors (6 equity, rates from FRED DGS10, gold from GLD); see README. Parts 2 to 4 were
   rerun. In Part 4 only the factor model's residuals changed; the regime rule, detector
   thresholds and scoring are unchanged.
+- 2026-10-24, Part 5 pilot, bug fix only: the first pilot attempt used a stale Makefile
+  that still listed llama-3.3-70b-versatile; every call returned 404 and no answers were
+  produced. The runner now stops when a model is not available instead of logging a
+  failure for every question. Nothing in the pre-registered design changed.
