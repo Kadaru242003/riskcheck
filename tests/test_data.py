@@ -83,12 +83,13 @@ real = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(scope="module")
+def cd():
+    return load()
+
+
 @real
 class TestRealData:
-    @pytest.fixture(scope="class")
-    def cd(self):
-        return load()
-
     def test_no_future_dates(self, cd):
         assert cd.returns.index.max() <= pd.Timestamp(END)
         assert cd.returns.index.max() <= pd.Timestamp.today()
