@@ -82,3 +82,7 @@ strong evidence; one that loses to it is the expected outcome.
   artifacts. The pre-registered scoring is kept and reported unchanged. An EXPLORATORY
   measure was added (reports/drift_exploratory.csv): the share of all alarms, on any
   day, that fall in a regime-start window. It is labelled exploratory everywhere.
+- 2026-10-24, design change before Part 5 is pre-registered: the factor model now has 8
+  factors (6 equity, rates from FRED DGS10, gold from GLD); see README. Parts 2 to 4 were
+  rerun. In Part 4 only the factor model's residuals changed; the regime rule, detector
+  thresholds and scoring are unchanged.
