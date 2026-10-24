@@ -1,6 +1,6 @@
 # riskcheck
 
-![CI](https://github.com/OWNER/riskcheck/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/Kadaru242003/riskcheck/actions/workflows/ci.yml/badge.svg)
 
 An open-source portfolio risk engine that forecasts Value at Risk and Expected Shortfall,
 tests those forecasts out of sample, detects regime breaks, and measures how often AI risk
