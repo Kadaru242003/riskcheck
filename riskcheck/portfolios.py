@@ -135,9 +135,12 @@ def summary(port_log: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_cumulative(port_log: pd.DataFrame, path: Path) -> None:
+    from riskcheck import plotting
+
+    plotting.style()
     fig, ax = plt.subplots(figsize=(10, 5))
-    for name, lr in port_log.items():
-        ax.plot(lr.index, np.exp(lr.cumsum()), label=name, linewidth=1.2)
+    for (name, lr), color in zip(port_log.items(), plotting.SERIES, strict=False):
+        ax.plot(lr.index, np.exp(lr.cumsum()), label=name, linewidth=1.2, color=color)
     for start, end in [
         ("2008-09-01", "2009-03-31"),
         ("2020-02-20", "2020-04-30"),
@@ -147,8 +150,7 @@ def plot_cumulative(port_log: pd.DataFrame, path: Path) -> None:
     ax.set_yscale("log")
     ax.set_ylabel("Growth of $1 (log scale)")
     ax.set_title("Cumulative returns by portfolio (shaded: 2008, 2020, 2022 stress)")
-    ax.legend(frameon=False, ncol=3)
-    ax.grid(alpha=0.3)
+    ax.legend(ncol=3)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)

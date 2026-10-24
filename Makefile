@@ -1,6 +1,6 @@
 PY ?= python
 
-.PHONY: install data portfolios backtest drift copilot report test lint all
+.PHONY: install data portfolios forecasts backtest drift copilot report test lint all
 
 install:
 	$(PY) -m pip install -r requirements.txt
@@ -11,8 +11,11 @@ data:
 portfolios:
 	$(PY) -m riskcheck.portfolios
 
+forecasts:
+	$(PY) -m riskcheck.forecasts
+
 backtest:
-	@echo "Parts 2-3: not implemented yet"
+	@echo "Part 3: not implemented yet"
 
 drift:
 	@echo "Part 4: not implemented yet"
@@ -30,4 +33,4 @@ lint:
 	$(PY) -m ruff check .
 	$(PY) -m ruff format --check .
 
-all: data portfolios backtest drift copilot report
+all: data portfolios forecasts backtest drift copilot report

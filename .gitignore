@@ -11,3 +11,8 @@ data/*
 
 # Secrets
 .env
+
+# Large intermediate outputs; regenerate with `make forecasts`
+reports/forecasts.parquet
+reports/attribution.parquet
+reports/garch_params.parquet
