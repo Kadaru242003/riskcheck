@@ -1,0 +1,20 @@
+[project]
+name = "riskcheck"
+version = "0.1.0"
+description = "Portfolio risk engine with honest uncertainty, regime drift detection, and an AI risk copilot study."
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+include = ["riskcheck*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

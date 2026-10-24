@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Raw downloads are never republished
+data/*
+!data/.gitkeep
+
+# Secrets
+.env
