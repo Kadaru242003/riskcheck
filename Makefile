@@ -9,7 +9,7 @@ data:
 	$(PY) -m riskcheck.data
 
 portfolios:
-	@echo "Part 1: not implemented yet"
+	$(PY) -m riskcheck.portfolios
 
 backtest:
 	@echo "Parts 2-3: not implemented yet"

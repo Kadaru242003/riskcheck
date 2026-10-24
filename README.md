@@ -11,7 +11,10 @@ Status: scaffolding. Headline findings will be added here after the final runs.
 ## Reproduce
 
 ```
+python3.11 -m venv .venv && source .venv/bin/activate
 make install
+make data         # downloads to data/raw (cached; reruns are offline)
+make portfolios   # reports/portfolio_summary.csv, reports/cumulative_returns.png
 make test
 ```
 
