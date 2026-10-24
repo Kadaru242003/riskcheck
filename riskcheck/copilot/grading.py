@@ -61,16 +61,45 @@ SYNONYMS = {
 _SYN = {s: k for k, v in SYNONYMS.items() for s in v}
 
 
-def final_answer(text: str) -> str | None:
-    hits = re.findall(r"FINAL ANSWER\s*:\s*(.+)", text or "", flags=re.I)
-    if not hits:
-        return None
-    ans = hits[-1].strip()
+FALLBACK_MAX_CHARS = 40
+
+
+def _clean(ans: str) -> str:
     prev = None
     while ans != prev:  # peel markdown and trailing punctuation in any order
         prev = ans
         ans = ans.strip().strip("*`_\"'").rstrip(".").strip()
     return ans
+
+
+def read_answer(text: str) -> tuple[str | None, str]:
+    """(answer, how it was read): from the last FINAL ANSWER line, or, if there is none,
+    from the last non-empty line when that line alone is a clear answer (decline, number,
+    yes/no or source, at most 40 characters). Otherwise (None, "missing")."""
+    hits = re.findall(r"FINAL ANSWER\s*:\s*(.+)", text or "", flags=re.I)
+    if hits:
+        return _clean(hits[-1]), "final_line"
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    if lines:
+        last = _clean(lines[-1])
+        if len(last) <= FALLBACK_MAX_CHARS and _is_bare_answer(last):
+            return last, "last_line_fallback"
+    return None, "missing"
+
+
+def _is_bare_answer(line: str) -> bool:
+    """True only if the whole line is exactly an answer, nothing else."""
+    a = line.strip().lower()
+    return (
+        bool(re.fullmatch(r"(cannot|can't|can not) answer", a))
+        or a in ("yes", "no")
+        or parse_number(line) is not None
+        or parse_source(line) is not None
+    )
+
+
+def final_answer(text: str) -> str | None:
+    return read_answer(text)[0]
 
 
 def parse_number(ans: str | None) -> float | None:
@@ -140,7 +169,7 @@ def supported(kind: str, ans: str, tool_calls: list[dict]) -> bool:
 
 def grade_one(q: dict, rec: dict) -> dict:
     text = rec.get("final_text", "")
-    ans = final_answer(text)
+    ans, read_as = read_answer(text)
     kind = answer_kind(ans)
     tools = rec.get("tool_calls", [])
     correct = False
@@ -164,6 +193,7 @@ def grade_one(q: dict, rec: dict) -> dict:
         "model": rec["model"],
         "condition": rec["condition"],
         "final_answer": ans,
+        "answer_read_as": read_as,
         "answer_kind": kind,
         "n_tool_calls": len(tools),
         "n_tool_errors": sum(bool(t.get("is_error")) for t in tools),

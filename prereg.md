@@ -189,3 +189,12 @@ Reported, but labelled exploratory, with no confirmatory claims:
   that still listed llama-3.3-70b-versatile; every call returned 404 and no answers were
   produced. The runner now stops when a model is not available instead of logging a
   failure for every question. Nothing in the pre-registered design changed.
+- 2026-10-24, Part 5 pilot, grading bug fix only: one pilot answer ended with a bare
+  "CANNOT ANSWER" line without the "FINAL ANSWER:" prefix, and the grader read it as no
+  answer. Fix: if there is no FINAL ANSWER line, the grader reads the last non-empty line,
+  but only when that whole line is exactly an answer (CANNOT ANSWER, yes, no, a number or
+  a source name; at most 40 characters). Each graded answer records how it was read, and
+  the results table reports the number of fallbacks and missing answers. The answer
+  format in the prompt, the hypotheses, metrics, tolerance, questions, answer key, models
+  and prompts are unchanged.
+

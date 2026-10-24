@@ -199,6 +199,8 @@ def results_table(g: pd.DataFrame) -> pd.DataFrame:
         unsupported_claim_rate=("unsupported_claim", "mean"),
         false_confidence_rate=("false_confidence", "mean"),
         mean_tool_calls=("n_tool_calls", "mean"),
+        format_fallbacks=("answer_read_as", lambda x: int((x == "last_line_fallback").sum())),
+        missing_answers=("answer_read_as", lambda x: int((x == "missing").sum())),
     )
     return agg.reset_index()
 

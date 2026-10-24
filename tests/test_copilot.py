@@ -128,6 +128,9 @@ def test_mcp_server_tools_and_errors():
         ("FINAL ANSWER: **2.37%**.", "2.37%"),
         ("final answer: yes\nFINAL ANSWER: no", "no"),
         ("no final line", None),
+        ("The date is after the data.\n\nCANNOT ANSWER", "CANNOT ANSWER"),
+        ("Using the tool.\n**2.561**", "2.561"),
+        ("I think the answer depends on many things we do not know", None),
     ],
 )
 def test_final_answer(text, expected):
@@ -443,3 +446,10 @@ def test_run_stops_on_unavailable_model(tmp_path):
     with pytest.raises(SystemExit, match="not available"):
         runner.run(llm, ["fake/model", "missing/model"], [], root=tmp_path)
     assert llm.calls == []
+
+
+def test_fallback_is_recorded():
+    g = grading.grade_one(_q("lookup", 2.0), _rec("2.01"))
+    assert g["correct"] and g["answer_read_as"] == "last_line_fallback"
+    g = grading.grade_one(_q("lookup", 2.0), _rec("FINAL ANSWER: 2.01"))
+    assert g["answer_read_as"] == "final_line"
