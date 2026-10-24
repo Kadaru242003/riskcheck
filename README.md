@@ -18,6 +18,33 @@ make portfolios   # reports/portfolio_summary.csv, reports/cumulative_returns.pn
 make test
 ```
 
+## MCP server: the risk engine as tools for AI agents
+
+After `make forecasts`, the engine is available as an MCP server over stdio with four
+tools: `get_var`, `get_attribution`, `get_backtest_stats` and `get_returns`.
+
+```
+make mcp        # or: python -m riskcheck.mcp_server
+```
+
+To connect an MCP client (for example a desktop AI app), add a server entry like this,
+with your own paths:
+
+```json
+{
+  "mcpServers": {
+    "riskcheck": {
+      "command": "/path/to/riskcheck/.venv/bin/python",
+      "args": ["-m", "riskcheck.mcp_server"],
+      "cwd": "/path/to/riskcheck"
+    }
+  }
+}
+```
+
+Unknown portfolio or model names, non-trading days and dates after 2025-12-31 come back
+as tool errors, so an agent can tell when a question cannot be answered.
+
 ## Design change: 8-factor risk model
 
 The original spec used the 6 Fama-French equity factors (market, size, value,

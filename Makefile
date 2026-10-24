@@ -1,6 +1,9 @@
 PY ?= python
+COPILOT_MODELS ?= llama-3.3-70b-versatile openai/gpt-oss-120b qwen/qwen3.8-27b
+JUDGE_MODEL ?= minimaxai/minimax-m2.7
 
-.PHONY: install data portfolios forecasts backtest drift copilot report test lint all
+.PHONY: install data portfolios forecasts backtest drift copilot-questions copilot-models \
+	copilot-pilot copilot copilot-judge copilot-label copilot-report mcp report test lint all
 
 install:
 	$(PY) -m pip install -r requirements.txt
@@ -20,8 +23,29 @@ backtest:
 drift:
 	$(PY) -m riskcheck.drift
 
+copilot-questions:
+	$(PY) -m riskcheck.copilot.questions
+
+copilot-models:
+	$(PY) -m riskcheck.copilot.runner models
+
+copilot-pilot:
+	$(PY) -m riskcheck.copilot.runner pilot --models $(COPILOT_MODELS)
+
 copilot:
-	@echo "Part 5: not implemented yet"
+	$(PY) -m riskcheck.copilot.runner run --models $(COPILOT_MODELS)
+
+copilot-judge:
+	$(PY) -m riskcheck.copilot.analysis judge --judge-model $(JUDGE_MODEL)
+
+copilot-label:
+	$(PY) -m riskcheck.copilot.analysis label
+
+copilot-report:
+	$(PY) -m riskcheck.copilot.analysis report
+
+mcp:
+	$(PY) -m riskcheck.mcp_server
 
 report:
 	@echo "Report generation: not implemented yet"

@@ -16,3 +16,6 @@ data/*
 reports/forecasts.parquet
 reports/attribution.parquet
 reports/garch_params.parquet
+
+# Pipeline test runs; not study results
+reports/copilot/pilot/
